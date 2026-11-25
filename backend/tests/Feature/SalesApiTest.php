@@ -300,4 +300,96 @@ class SalesApiTest extends TestCase
             ->value('quantity_on_hand');
         $this->assertEquals(5.0, $qtyAfterSecondVoid);
     }
+
+public function test_non_admin_without_branch_permission_gets_403_and_records_audit(): void
+{
+    $orgId = (string) Str::uuid();
+    $branchId = (string) Str::uuid();
+    $otherOrgId = (string) Str::uuid();
+    $otherOrgBranchId = (string) Str::uuid();
+
+    DB::table('organizations')->insert([
+        [
+            'id' => $orgId,
+            'code' => 'ORG-RBAC-01',
+            'name' => 'RBAC Test Org',
+            'status' => 'ACTIVE',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => $otherOrgId,
+            'code' => 'ORG-RBAC-02',
+            'name' => 'Other RBAC Org',
+            'status' => 'ACTIVE',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+
+    DB::table('branches')->insert([
+        [
+            'id' => $branchId,
+            'organization_id' => $orgId,
+            'code' => 'BR-01',
+            'name' => 'Main Branch',
+            'status' => 'ACTIVE',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'id' => $otherOrgBranchId,
+            'organization_id' => $otherOrgId,
+            'code' => 'BR-OTHER',
+            'name' => 'Other Org Branch',
+            'status' => 'ACTIVE',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+
+    $nonAdminId = (string) Str::uuid();
+    DB::table('users')->insert([
+        'id' => $nonAdminId,
+        'organization_id' => $orgId,
+        'employee_code' => 'EMP-NO-PERM-01',
+        'email' => 'no-perm@local.test',
+        'password_hash' => Hash::make('TestPass123!'),
+        'full_name' => 'No Perm Staff',
+        'is_org_admin' => false,
+        'status' => 'ACTIVE',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    /** @var User $nonAdmin */
+    $nonAdmin = User::withoutGlobalScope('organization')->findOrFail($nonAdminId);
+    /** @var TokenService $tokenService */
+    $tokenService = app(TokenService::class);
+    $issued = $tokenService->issueTokenPair($nonAdmin);
+    $nonAdminToken = (string) ($issued['access_token'] ?? $issued['token'] ?? '');
+
+    $response = $this->withHeaders([
+        'Authorization' => 'Bearer ' . $nonAdminToken,
+        'X-Branch-Id' => $branchId,
+    ])->getJson('/api/v1/sales');
+
+    $response->assertStatus(403)
+        ->assertJsonPath('error.code', 'FORBIDDEN');
+
+    $this->assertDatabaseHas('audit_logs', [
+        'organization_id' => $orgId,
+        'branch_id' => $branchId,
+        'actor_id' => $nonAdminId,
+        'action' => 'AUTHZ_DENIED',
+    ]);
+
+    $otherOrgResponse = $this->withHeaders([
+        'Authorization' => 'Bearer ' . $nonAdminToken,
+        'X-Branch-Id' => $otherOrgBranchId,
+    ])->getJson('/api/v1/sales');
+
+    $otherOrgResponse->assertStatus(403)
+        ->assertJsonPath('error.code', 'FORBIDDEN_BRANCH');
+}
 }
