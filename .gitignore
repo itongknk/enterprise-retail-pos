@@ -1,4 +1,4 @@
-﻿vendor/
+vendor/
 node_modules/
 .env
 *.log
@@ -6,3 +6,8 @@ node_modules/
 frontend/dist/
 frontend/.env.local
 frontend/vite.config.ts.bak
+
+_backups/
+backups/
+products_import_sample.csv
+validate_products_csv.ps1
