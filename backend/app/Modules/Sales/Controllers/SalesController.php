@@ -107,6 +107,11 @@ class SalesController extends Controller
 
     public function void(Request $request, string $id): JsonResponse
     {
+        if (! \Illuminate\Support\Str::isUuid($id)) {
+            return response()->json([
+                'message' => 'Invalid sale ID format.',
+            ], 422);
+        }
         $validated = $request->validate([
             'reason' => ['required', 'string', 'max:500'],
         ]);
