@@ -3,8 +3,7 @@ import { BranchItem } from './components/BranchSwitcher';
 import { PosWorkspace } from './PosWorkspace';
 
 const DEFAULT_BRANCHES: BranchItem[] = [
-  { id: 'branch-hq', code: 'HQ', name: 'สำนักงานใหญ่', timezone: 'Asia/Bangkok' },
-  { id: 'branch-01', code: 'B01', name: 'สาขา 01', timezone: 'Asia/Bangkok' },
+  { id: '22222222-2222-4222-8222-222222222201', code: 'BR-001', name: 'สาขา 01', timezone: 'Asia/Bangkok' },
 ];
 
 export const App: React.FC = () => {

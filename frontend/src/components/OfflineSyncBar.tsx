@@ -38,11 +38,11 @@ export const OfflineSyncBar: React.FC<OfflineSyncBarProps> = ({
       setPendingCount(result.remainingCount);
       if (result.syncedCount > 0 || result.failedCount > 0) {
         setStatusMsg(
-          `ซิงก์สำเร็จ ${result.syncedCount} รายการ | ผิดพลาด ${result.failedCount} รายการ | ค้างอยู่ ${result.remainingCount} รายการ`
+          `Synced ${result.syncedCount} | Failed ${result.failedCount} | Remaining ${result.remainingCount}`
         );
       }
     } catch (err) {
-      setStatusMsg(err instanceof Error ? err.message : 'ซิงก์คิวไม่สำเร็จ');
+      setStatusMsg(err instanceof Error ? err.message : 'Sync failed');
     } finally {
       setSyncing(false);
     }
@@ -80,8 +80,8 @@ export const OfflineSyncBar: React.FC<OfflineSyncBarProps> = ({
       }}
     >
       <div>
-        <strong>สถานะเครือข่าย:</strong> {isOnline ? 'ออนไลน์ (Online)' : 'ออฟไลน์ (Offline)'} |{' '}
-        <strong>ค้างซิงก์ (IndexedDB):</strong> {pendingCount} รายการ
+        <strong>Connection:</strong> {isOnline ? 'Online' : 'Offline'} |{' '}
+        <strong>Pending Queue (IndexedDB):</strong> {pendingCount}
         {statusMsg && <div style={{ marginTop: '4px', fontSize: '0.9em' }}>{statusMsg}</div>}
       </div>
 
@@ -90,7 +90,7 @@ export const OfflineSyncBar: React.FC<OfflineSyncBarProps> = ({
         onClick={handleSyncNow}
         disabled={syncing || !isOnline || pendingCount === 0}
       >
-        {syncing ? 'กำลังซิงก์...' : 'ซิงก์ทันที'}
+        {syncing ? 'Syncing...' : 'Sync Now'}
       </button>
     </div>
   );

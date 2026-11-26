@@ -4,6 +4,7 @@ import { OfflineSyncBar } from './components/OfflineSyncBar';
 import { SalesPanel } from './components/SalesPanel';
 import { ShiftPanel } from './components/ShiftPanel';
 import { StockTransferPanel } from './components/StockTransferPanel';
+import { UserManagementPanel } from './components/UserManagementPanel';
 
 interface PosWorkspaceProps {
   organizationId: string;
@@ -51,6 +52,13 @@ export const PosWorkspace: React.FC<PosWorkspaceProps> = ({
         organizationId={organizationId}
         branches={branches}
         sourceBranchId={selectedBranchId}
+        accessToken={accessToken}
+      />
+
+      <UserManagementPanel
+        organizationId={organizationId}
+        branches={branches}
+        branchId={selectedBranchId}
         accessToken={accessToken}
       />
     </div>

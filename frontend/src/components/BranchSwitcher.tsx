@@ -20,14 +20,14 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
 }) => {
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-      <label htmlFor="branch-switcher">สาขา:</label>
+      <label htmlFor="branch-switcher">Branch:</label>
       <select
         id="branch-switcher"
         value={selectedBranchId ?? ''}
         onChange={(e) => onChange(e.target.value)}
       >
         <option value="" disabled>
-          -- เลือกสาขา --
+          -- Select branch --
         </option>
         {branches.map((branch) => (
           <option key={branch.id} value={branch.id}>

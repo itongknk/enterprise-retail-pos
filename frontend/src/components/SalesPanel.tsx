@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { enqueuePosOperation } from '../api/offlineQueue';
-import { createSale, voidSale } from '../api/posApi';
+import { createSale, CreateSalePayload, voidSale } from '../api/posApi';
 
 interface SalesPanelProps {
   organizationId: string;
@@ -29,6 +29,8 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
   accessToken,
 }) => {
   const [productId, setProductId] = useState<string>('');
+  const [scanQuery, setScanQuery] = useState<string>('');
+  const [lookupHint, setLookupHint] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<string>('1');
   const [discountAmount, setDiscountAmount] = useState<string>('0');
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
@@ -44,6 +46,27 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
 
   const auth = { accessToken, branchId };
 
+  const handleLookupInput = (rawValue: string) => {
+    setScanQuery(rawValue);
+    const cleaned = rawValue.trim();
+    if (!cleaned) {
+      setLookupHint(null);
+      return;
+    }
+    setProductId(cleaned);
+    setLookupHint(`Matched input "${cleaned}" (barcode -> SKU/code) into Product ID.`);
+  };
+
+  const handleScanKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const cleaned = scanQuery.trim();
+      if (cleaned) {
+        setProductId(cleaned);
+        setLookupHint(`Scanned/entered "${cleaned}" -> ready for sale.`);
+      }
+    }
+  };
+
   const extractSaleId = (res: unknown): string => {
     const obj = res as { data?: SaleResultData } & SaleResultData;
     return obj?.data?.sale?.id || obj?.data?.id || obj?.sale?.id || obj?.id || '';
@@ -52,22 +75,43 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
   const handleCreateSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!branchId) {
-      setErrorMsg('กรุณาเลือกสาขาก่อนบันทึกการขาย');
+      setErrorMsg('Please select a branch before creating a sale.');
       return;
     }
 
-    const salePayload = {
+    const trimmedProductId = productId.trim();
+    const parsedQty = Number(quantity);
+    const parsedDiscount = Number(discountAmount || '0');
+    const parsedTendered = Number(amountTendered || '0');
+
+    if (!trimmedProductId || !Number.isFinite(parsedQty) || parsedQty <= 0) {
+      setErrorMsg('Please enter a valid Product ID and quantity greater than 0.');
+      return;
+    }
+
+    const normalizedDiscount =
+      Number.isFinite(parsedDiscount) && parsedDiscount >= 0 ? parsedDiscount : 0;
+    const normalizedTendered =
+      Number.isFinite(parsedTendered) && parsedTendered >= 0 ? parsedTendered : 0;
+    const trimmedNote = note.trim();
+
+    const salePayload: CreateSalePayload = {
       organization_id: organizationId,
       branch_id: branchId,
-      items: [{ product_id: productId.trim(), quantity: Number(quantity) }],
-      discount_amount: Number(discountAmount) || 0,
+      items: [
+        {
+          product_id: trimmedProductId,
+          quantity: parsedQty,
+        },
+      ],
+      discount_amount: normalizedDiscount,
       payments: [
         {
           payment_method: paymentMethod,
-          amount_tendered: Number(amountTendered),
+          amount_tendered: normalizedTendered,
         },
       ],
-      note: note || undefined,
+      ...(trimmedNote ? { note: trimmedNote } : {}),
     };
 
     setLoading(true);
@@ -83,9 +127,9 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
           body: salePayload,
           branchId,
         });
-        setQueuedMsg(`ออฟไลน์: บันทึกคำสั่งขายลงคิวรอซิงก์แล้ว (Queue ID: ${queued.id})`);
+        setQueuedMsg(`Offline mode: Sale queued for sync (Queue ID: ${queued.id})`);
       } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : 'บันทึกคิวออฟไลน์ไม่สำเร็จ');
+        setErrorMsg(err instanceof Error ? err.message : 'Failed to queue offline sale');
       } finally {
         setLoading(false);
       }
@@ -105,9 +149,9 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
           body: salePayload,
           branchId,
         });
-        setQueuedMsg(`เครือข่ายขัดข้อง: เก็บคำสั่งขายลงคิวรอซิงก์แล้ว (Queue ID: ${queued.id})`);
+        setQueuedMsg(`Request failed, queued for sync: ${err instanceof Error ? err.message : 'Network error'} (Queue ID: ${queued.id})`);
       } catch {
-        setErrorMsg(err instanceof Error ? err.message : 'บันทึกการขายไม่สำเร็จ');
+        setErrorMsg(err instanceof Error ? err.message : 'Failed to create sale');
       }
     } finally {
       setLoading(false);
@@ -117,7 +161,7 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
   const handleVoidSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!saleId.trim() || !voidReason.trim()) {
-      setErrorMsg('กรุณาระบุรหัสบิลและเหตุผลการยกเลิก');
+      setErrorMsg('Please enter both Sale ID and Void Reason.');
       return;
     }
 
@@ -136,9 +180,9 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
           body: voidPayload,
           branchId,
         });
-        setQueuedMsg(`ออฟไลน์: เก็บคำสั่งยกเลิกบิลลงคิวรอซิงก์แล้ว (Queue ID: ${queued.id})`);
+        setQueuedMsg(`Offline mode: Void sale queued for sync (Queue ID: ${queued.id})`);
       } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : 'บันทึกคิวยกเลิกบิลไม่สำเร็จ');
+        setErrorMsg(err instanceof Error ? err.message : 'Failed to queue void sale');
       } finally {
         setLoading(false);
       }
@@ -156,9 +200,9 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
           body: voidPayload,
           branchId,
         });
-        setQueuedMsg(`เครือข่ายขัดข้อง: เก็บคำสั่งยกเลิกบิลลงคิวรอซิงก์แล้ว (Queue ID: ${queued.id})`);
+        setQueuedMsg(`Request failed, queued for sync: ${err instanceof Error ? err.message : 'Network error'} (Queue ID: ${queued.id})`);
       } catch {
-        setErrorMsg(err instanceof Error ? err.message : 'ยกเลิกบิลไม่สำเร็จ');
+        setErrorMsg(err instanceof Error ? err.message : 'Failed to void sale');
       }
     } finally {
       setLoading(false);
@@ -169,7 +213,7 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
 
   return (
     <div style={{ border: '1px solid #d1d5db', borderRadius: '8px', padding: '16px' }}>
-      <h3>ขายสินค้าและยกเลิกบิล</h3>
+      <h3>Sales & Void</h3>
 
       {errorMsg && (
         <div style={{ color: '#b91c1c', marginBottom: '12px' }}>{errorMsg}</div>
@@ -183,7 +227,21 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
 
       <form onSubmit={handleCreateSale} style={{ display: 'grid', gap: '8px', maxWidth: '420px' }}>
         <label>
-          รหัสสินค้า (Product ID):
+          Scan Barcode / Search SKU or Name:
+          <input
+            type="text"
+            value={scanQuery}
+            onChange={(e) => handleLookupInput(e.target.value)}
+            onKeyDown={handleScanKeyDown}
+            placeholder="Scan barcode or enter SKU / product code"
+          />
+        </label>
+        {lookupHint && (
+          <div style={{ fontSize: '0.85em', color: '#374151' }}>{lookupHint}</div>
+        )}
+
+        <label>
+          Product ID:
           <input
             type="text"
             value={productId}
@@ -193,7 +251,7 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
         </label>
 
         <label>
-          จำนวน:
+          Quantity:
           <input
             type="number"
             min="1"
@@ -205,7 +263,7 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
         </label>
 
         <label>
-          ส่วนลด (บาท):
+          Discount Amount:
           <input
             type="number"
             min="0"
@@ -216,16 +274,16 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
         </label>
 
         <label>
-          วิธีชำระเงิน:
+          Payment Method:
           <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-            <option value="CASH">เงินสด (CASH)</option>
-            <option value="TRANSFER">เงินโอน (TRANSFER)</option>
-            <option value="CARD">บัตร (CARD)</option>
+            <option value="CASH">Cash (CASH)</option>
+            <option value="TRANSFER">Transfer (TRANSFER)</option>
+            <option value="CARD">Card (CARD)</option>
           </select>
         </label>
 
         <label>
-          ยอดรับชำระ (บาท):
+          Amount Tendered:
           <input
             type="number"
             min="0"
@@ -237,7 +295,7 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
         </label>
 
         <label>
-          หมายเหตุ:
+          Note:
           <input
             type="text"
             value={note}
@@ -246,7 +304,7 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
         </label>
 
         <button type="submit" disabled={loading || !branchId}>
-          {loading ? 'กำลังบันทึก...' : 'ชำระเงินและออกบิล'}
+          {loading ? 'Processing...' : 'Create Sale'}
         </button>
       </form>
 
@@ -255,39 +313,39 @@ export const SalesPanel: React.FC<SalesPanelProps> = ({
         style={{ marginTop: '16px', display: 'grid', gap: '8px', maxWidth: '420px' }}
       >
         <label>
-          รหัสบิล (Sale ID):
+          Sale ID:
           <input
             type="text"
             value={saleId}
             onChange={(e) => setSaleId(e.target.value)}
-            placeholder="กรอกหรือรับอัตโนมัติหลังขาย"
+            placeholder="Enter Sale ID"
           />
         </label>
 
         <label>
-          เหตุผลการยกเลิกบิล (Void Reason):
+          Void Reason:
           <input
             type="text"
             value={voidReason}
             onChange={(e) => setVoidReason(e.target.value)}
-            placeholder="เช่น ลูกค้าเปลี่ยนรายการสินค้า"
+            placeholder="Enter void reason"
           />
         </label>
 
         <button type="submit" disabled={loading || !saleId.trim()}>
-          {loading ? 'กำลังยกเลิก...' : 'ยกเลิกบิล (Void Sale)'}
+          {loading ? 'Processing...' : 'Void Sale'}
         </button>
       </form>
 
       {activeSale && (
         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
           <div>
-            <strong>เลขที่บิล:</strong> {activeSale.sale_number ?? '-'} |{' '}
-            <strong>สถานะ:</strong> {activeSale.status ?? '-'}
+            <strong>Sale Number:</strong> {activeSale.sale_number ?? '-'} {' | '}
+            <strong>Status:</strong> {activeSale.status ?? '-'}
           </div>
           <div>
-            <strong>ยอดสุทธิ:</strong> {activeSale.total_amount ?? '-'} |{' '}
-            <strong>ผูกกะ (Shift ID):</strong> {activeSale.shift_id ?? 'ไม่มีกะเปิดอยู่'}
+            <strong>Total Amount:</strong> {activeSale.total_amount ?? '-'} {' | '}
+            <strong>Shift ID:</strong> {activeSale.shift_id ?? '-'}
           </div>
         </div>
       )}
