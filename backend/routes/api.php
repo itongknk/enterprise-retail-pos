@@ -3,6 +3,7 @@
 use App\Http\Middleware\AuthenticateApiToken;
 use App\Http\Middleware\RequireBranchPermission;
 use App\Modules\IdentityAccess\Controllers\AuthController;
+use App\Modules\IdentityAccess\Controllers\UserController;
 use App\Modules\Sales\Controllers\SalesController;
 use App\Modules\Sync\Controllers\SyncPushController;
 use Illuminate\Support\Facades\Route;
@@ -43,4 +44,13 @@ Route::prefix('v1')->group(function (): void {
         Route::middleware(RequireBranchPermission::class . ':branches.view,required')
             ->post('/sync/push', SyncPushController::class);
     });
+        Route::middleware(AuthenticateApiToken::class)->group(function () : void {
+            Route::prefix('users')->group(function () : void {
+                Route::middleware(RequireBranchPermission::class . ':branches.view,required')->get('/', [UserController::class, 'index']);
+                Route::middleware(RequireBranchPermission::class . ':branches.view,required')->post('/', [UserController::class, 'store']);
+                Route::middleware(RequireBranchPermission::class . ':branches.view,required')->get('/{id}', [UserController::class, 'show']);
+                Route::middleware(RequireBranchPermission::class . ':branches.view,required')->patch('/{id}', [UserController::class, 'update']);
+            });
+        });
+
 });

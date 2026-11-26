@@ -4,3 +4,5 @@ node_modules/
 *.log
 
 frontend/dist/
+frontend/.env.local
+frontend/vite.config.ts.bak
